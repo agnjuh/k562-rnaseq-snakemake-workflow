@@ -1,0 +1,31 @@
+reference:
+  fasta: "data/reference/genome.fa.gz"
+  gtf: "data/reference/annotation.gtf"
+  hisat2_index_prefix: "data/reference/hisat2_index/genome"
+
+params:
+  threads: 8
+
+  fastqc:
+    extra: ""
+
+  fastp:
+    extra: "--detect_adapter_for_pe"
+
+  hisat2:
+    extra: "--rna-strandness RF -k 10"
+
+  samtools:
+    sort_extra: ""
+    view_extra: ""
+
+  featurecounts:
+    extra: "-p -B -M -t exon -g gene_id"
+
+deseq2:
+  design: "~ condition"
+  contrast:
+    factor: "condition"
+    numerator: "hs60"
+    denominator: "hs0"
+

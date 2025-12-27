@@ -1,0 +1,125 @@
+import pandas as pd
+
+configfile: "workflow/config.yaml"
+
+SAMPLES_TSV = "workflow/samples.tsv"
+samples = pd.read_csv(SAMPLES_TSV, sep="\t")
+
+
+# convenience lookups
+SAMPLE_NAMES = samples["sample"].tolist()
+R1 = dict(zip(samples["sample"], samples["r1"]))
+R2 = dict(zip(samples["sample"], samples["r2"]))
+
+THREADS = int(config["params"]["threads"])
+
+
+rule all:
+    input:
+        # FastQC on raw reads (FastQC names outputs from input basenames -> *_fastqc.*)
+        expand("../results/qc/fastqc/raw/{sample}_R1_fastqc.html", sample=SAMPLE_NAMES),
+        expand("../results/qc/fastqc/raw/{sample}_R1_fastqc.zip",  sample=SAMPLE_NAMES),
+        expand("../results/qc/fastqc/raw/{sample}_R2_fastqc.html", sample=SAMPLE_NAMES),
+        expand("../results/qc/fastqc/raw/{sample}_R2_fastqc.zip",  sample=SAMPLE_NAMES),
+
+        # fastp outputs + reports
+        expand("../results/trimmed/{sample}_R1.trim.fastq.gz", sample=SAMPLE_NAMES),
+        expand("../results/trimmed/{sample}_R2.trim.fastq.gz", sample=SAMPLE_NAMES),
+        expand("../results/trimmed/{sample}.fastp.html",       sample=SAMPLE_NAMES),
+        expand("../results/trimmed/{sample}.fastp.json",       sample=SAMPLE_NAMES),
+
+        # FastQC on trimmed reads
+        expand("../results/qc/fastqc/trimmed/{sample}_R1.trim_fastqc.html", sample=SAMPLE_NAMES),
+        expand("../results/qc/fastqc/trimmed/{sample}_R1.trim_fastqc.zip",  sample=SAMPLE_NAMES),
+        expand("../results/qc/fastqc/trimmed/{sample}_R2.trim_fastqc.html", sample=SAMPLE_NAMES),
+        expand("../results/qc/fastqc/trimmed/{sample}_R2.trim_fastqc.zip",  sample=SAMPLE_NAMES),
+
+        # MultiQC summary report
+        "../results/qc/multiqc/multiqc_report.html",
+
+
+rule fastqc_raw:
+    input:
+        r1=lambda wc: R1[wc.sample],
+        r2=lambda wc: R2[wc.sample]
+    output:
+        r1_html="../results/qc/fastqc/raw/{sample}_R1_fastqc.html",
+        r1_zip="../results/qc/fastqc/raw/{sample}_R1_fastqc.zip",
+        r2_html="../results/qc/fastqc/raw/{sample}_R2_fastqc.html",
+        r2_zip="../results/qc/fastqc/raw/{sample}_R2_fastqc.zip"
+    threads: 2
+    conda:
+        "envs/fastqc.yaml"
+    shell:
+        r"""
+        mkdir -p ../results/qc/fastqc/raw
+        fastqc -t {threads} -o ../results/qc/fastqc/raw {input.r1} {input.r2}
+        """
+
+
+rule fastp_trim:
+    input:
+        r1=lambda wc: R1[wc.sample],
+        r2=lambda wc: R2[wc.sample]
+    output:
+        r1="../results/trimmed/{sample}_R1.trim.fastq.gz",
+        r2="../results/trimmed/{sample}_R2.trim.fastq.gz",
+        html="../results/trimmed/{sample}.fastp.html",
+        json="../results/trimmed/{sample}.fastp.json"
+    threads: THREADS
+    conda:
+        "envs/fastp.yaml"
+    params:
+        extra=config["params"]["fastp"]["extra"]
+    shell:
+        r"""
+        mkdir -p ../results/trimmed
+        fastp \
+          -w {threads} \
+          -i {input.r1} -I {input.r2} \
+          -o {output.r1} -O {output.r2} \
+          -h {output.html} -j {output.json} \
+          {params.extra}
+        """
+
+
+rule fastqc_trimmed:
+    input:
+        r1="../results/trimmed/{sample}_R1.trim.fastq.gz",
+        r2="../results/trimmed/{sample}_R2.trim.fastq.gz"
+    output:
+        r1_html="../results/qc/fastqc/trimmed/{sample}_R1.trim_fastqc.html",
+        r1_zip="../results/qc/fastqc/trimmed/{sample}_R1.trim_fastqc.zip",
+        r2_html="../results/qc/fastqc/trimmed/{sample}_R2.trim_fastqc.html",
+        r2_zip="../results/qc/fastqc/trimmed/{sample}_R2.trim_fastqc.zip"
+    threads: 2
+    conda:
+        "envs/fastqc.yaml"
+    shell:
+        r"""
+        mkdir -p ../results/qc/fastqc/trimmed
+        fastqc -t {threads} -o ../results/qc/fastqc/trimmed {input.r1} {input.r2}
+        """
+
+
+rule multiqc:
+    input:
+        raw_fastqc_html=(
+            expand("../results/qc/fastqc/raw/{sample}_R1_fastqc.html", sample=SAMPLE_NAMES) +
+            expand("../results/qc/fastqc/raw/{sample}_R2_fastqc.html", sample=SAMPLE_NAMES)
+        ),
+        trimmed_fastqc_html=(
+            expand("../results/qc/fastqc/trimmed/{sample}_R1.trim_fastqc.html", sample=SAMPLE_NAMES) +
+            expand("../results/qc/fastqc/trimmed/{sample}_R2.trim_fastqc.html", sample=SAMPLE_NAMES)
+        ),
+        fastp_html=expand("../results/trimmed/{sample}.fastp.html", sample=SAMPLE_NAMES)
+    output:
+        html="../results/qc/multiqc/multiqc_report.html"
+    threads: 1
+    conda:
+        "envs/multiqc.yaml"
+    shell:
+        r"""
+        mkdir -p ../results/qc/multiqc
+        multiqc -o ../results/qc/multiqc ../results/qc/fastqc/raw ../results/qc/fastqc/trimmed ../results/trimmed
+        """
