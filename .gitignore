@@ -3,18 +3,36 @@
 .vscode/
 .idea/
 
-# raw data & references (do not version large files)
+# Raw sequencing data
 data/raw/
-data/reference/
+*.fastq
+*.fastq.gz
+*.fq.gz
 
-# results (generated files)
+# Results and intermediate files
 results/
-
-# snakemake
-.snakemake/
 logs/
 tmp/
 
-# conda
-*.conda
+# Snakemake internals
+.snakemake/
+
+# Reference genome large files
+data/reference/**/*.fa
+data/reference/**/*.fa.gz
+
+# Aligner indices
+data/reference/**/hisat2_index/
+data/reference/**/star_index/
+
+# Reference auxiliary binary files
+data/reference/**/*.fai
+data/reference/**/*.dict
+
+# Alignment files
+*.sam
+*.bam
+*.bai
+*.cram
+*.crai
 
