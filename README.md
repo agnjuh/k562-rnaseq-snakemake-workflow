@@ -1,58 +1,100 @@
-# Snakemake-based RNA-seq analysis workflow
+# mRNA-seq-heatshock-snakemake
 
-This repository contains a **fully reproducible Snakemake workflow** for
-processing paired-end human **mRNA-seq** data, covering quality control,
-read trimming, reference preparation, splice-aware alignment, and BAM
-processing. All steps are executed in **tool-specific Conda environments**.
+A reproducible **Snakemake workflow for bulk mRNA-seq analysis** using a heat shock experiment in the K562 human leukemia cell line as an example dataset.
 
 ---
 
-## Analysis steps
+## Example dataset
 
-- Raw read quality control — **FastQC**
-- Adapter and quality trimming — **fastp**
-- Post-trimming quality control — **FastQC**
-- Aggregated QC reporting — **MultiQC**
-- Reference genome indexing — **HISAT2**
-- Splice-aware read alignment — **HISAT2**
-- BAM sorting and indexing — **samtools**
+mRNA-seq data from the **K562 chronic myelogenous leukemia (CML) cell line** subjected to heat shock treatment.
 
-Reference genome: **T2T-CHM13 v2.0 (Homo sapiens)**
-
----
-
-## Test dataset (exact specification)
-
-The workflow was developed and validated using publicly available human
-mRNA-seq data from the **K562 chronic myelogenous leukemia (CML) cell line**.
-
-- **Data source:** NCBI Sequence Read Archive (SRA)
-- **Run accession:** `SRR534301`
-- **BioProject:** `PRJNA279664`
+- **Data source:** European Nucleotide Archive (ENA) / NCBI Sequence Read Archive (SRA)
+- **BioProject:** `PRJNA527268`
 - **Organism:** *Homo sapiens*
 - **Cell line:** K562
-- **Library strategy:** RNA-Seq
+- **Library strategy:** RNA-Seq (bulk mRNA-seq)
 - **Library layout:** Paired-end
-- **Read files:**
-  - `SRR534301_1.fastq.gz`
-  - `SRR534301_2.fastq.gz`
-- **Sample identifier used in workflow:** `test`
+- **Sequencing platform:** Illumina NextSeq 500
+- **Read type:** Poly(A)-enriched mRNA
 
 ---
 
-## Requirements
+## Experimental design
 
-- **Conda / Miniconda**
-- **Snakemake ≥ 7.x**
+- **hs0:** 37 °C control condition (no heat shock)
+- **hs60:** 42 °C heat shock for 45 minutes
 
-All tools (**FastQC, fastp, MultiQC, HISAT2, samtools**) are installed
-automatically via Conda.
+Differential expression analysis is performed between **hs60 vs hs0** using DESeq2.
 
 ---
 
-## Usage
+## Samples used in the example run
 
-From the repository root:
+| Sample ID  | Condition | Run accession |
+|-----------|----------|---------------|
+| hs0_rep1  | hs0      | SRR11195434 |
+| hs0_rep2  | hs0      | SRR11195435 |
+| hs0_rep3  | hs0      | SRR11195436 |
+| hs60_rep1 | hs60     | SRR11195422 |
+| hs60_rep2 | hs60     | SRR11195423 |
 
-```bash
-snakemake --cores 2 -s workflow/Snakefile --use-conda
+---
+
+## Read files
+
+Paired-end FASTQ files were downloaded directly from the ENA FTP server:
+SRR11195434_1.fastq.gz
+SRR11195434_2.fastq.gz
+SRR11195435_1.fastq.gz
+SRR11195435_2.fastq.gz
+SRR11195436_1.fastq.gz
+SRR11195436_2.fastq.gz
+SRR11195422_1.fastq.gz
+SRR11195422_2.fastq.gz
+SRR11195423_1.fastq.gz
+SRR11195423_2.fastq.gz
+
+---
+
+## Workflow overview
+
+The pipeline performs the following steps:
+
+1. Raw read quality control (FastQC)
+2. Adapter and quality trimming (fastp)
+3. Alignment to the human reference genome (HISAT2)
+4. BAM processing and QC (samtools)
+5. Gene-level quantification (featureCounts)
+6. Differential expression analysis (DESeq2)
+
+---
+
+## Input specification
+
+Samples are defined in a tab-separated file:
+sample    condition    r1                               r2
+hs0_rep1  hs0          data/raw/hs0_rep1_R1.fastq.gz    data/raw/hs0_rep1_R2.fastq.gz
+hs0_rep2  hs0          data/raw/hs0_rep2_R1.fastq.gz    data/raw/hs0_rep2_R2.fastq.gz
+hs0_rep3  hs0          data/raw/hs0_rep3_R1.fastq.gz    data/raw/hs0_rep3_R2.fastq.gz
+hs60_rep1 hs60         data/raw/hs60_rep1_R1.fastq.gz   data/raw/hs60_rep1_R2.fastq.gz
+hs60_rep2 hs60         data/raw/hs60_rep2_R1.fastq.gz   data/raw/hs60_rep2_R2.fastq.gz
+
+---
+
+## Output
+
+Key outputs include:
+
+- Gene count matrix
+- DESeq2 differential expression results
+- Normalized counts
+- QC reports (FastQC, MultiQC)
+- Session information for reproducibility
+
+---
+
+## Notes
+
+The example dataset is used for demonstration purposes only.  
+The workflow is **generalisable** to other bulk mRNA-seq datasets with arbitrary numbers of biological replicates and experimental conditions.
+

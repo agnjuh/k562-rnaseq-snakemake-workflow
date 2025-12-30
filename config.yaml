@@ -1,7 +1,7 @@
 reference:
-  fasta: "data/reference/genome.fa.gz"
-  gtf: "data/reference/annotation.gtf"
-  hisat2_index_prefix: "data/reference/hisat2_index/genome"
+  fasta: "data/reference/chm13v2/chm13v2.0.fa.gz"
+  gtf: "data/reference/chm13v2/annotation/annotation.ucsc.clean.gtf"
+  hisat2_index_prefix: "data/reference/chm13v2/hisat2_index/chm13v2"
 
 params:
   threads: 8
@@ -13,14 +13,16 @@ params:
     extra: "--detect_adapter_for_pe"
 
   hisat2:
-    extra: "--rna-strandness RF -k 10"
+    # strand-specific, paired-end, no discordant / mixed, keep up to 10 alignments
+    extra: "--rna-strandness RF --no-mixed --no-discordant -k 10"
 
   samtools:
     sort_extra: ""
     view_extra: ""
 
   featurecounts:
-    extra: "-p -B -M -t exon -g gene_id"
+    # paired-end, require both ends mapped, allow multi-overlap, exon-level, gene_id
+    extra: "-p -B -C -M -t exon -g gene_id"
 
 deseq2:
   design: "~ condition"
@@ -28,4 +30,3 @@ deseq2:
     factor: "condition"
     numerator: "hs60"
     denominator: "hs0"
-

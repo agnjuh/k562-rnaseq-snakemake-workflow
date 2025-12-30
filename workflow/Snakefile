@@ -5,11 +5,43 @@ configfile: "config.yaml"
 SAMPLES_TSV = "samples.tsv"
 samples = pd.read_csv(SAMPLES_TSV, sep="\t")
 
+# convenience lookups
 SAMPLE_NAMES = samples["sample"].tolist()
 R1 = dict(zip(samples["sample"], samples["r1"]))
 R2 = dict(zip(samples["sample"], samples["r2"]))
 
+# config-driven params
 THREADS = int(config["params"]["threads"])
+
+REF_FASTA_GZ = config["reference"]["fasta"]
+GTF = config["reference"]["gtf"]
+HISAT2_PREFIX = config["reference"]["hisat2_index_prefix"]
+
+FASTQC_EXTRA = config["params"].get("fastqc", {}).get("extra", "")
+FASTP_EXTRA = config["params"].get("fastp", {}).get("extra", "")
+HISAT2_EXTRA = config["params"].get("hisat2", {}).get("extra", "")
+SAMTOOLS_SORT_EXTRA = config["params"].get("samtools", {}).get("sort_extra", "")
+SAMTOOLS_VIEW_EXTRA = config["params"].get("samtools", {}).get("view_extra", "")
+FEATURECOUNTS_EXTRA = config["params"].get("featurecounts", {}).get("extra", "")
+
+# DESeq2 config
+DESEQ2_DESIGN = config.get("deseq2", {}).get("design", "~ condition")
+DESEQ2_FACTOR = config.get("deseq2", {}).get("contrast", {}).get("factor", "condition")
+DESEQ2_NUM = config.get("deseq2", {}).get("contrast", {}).get("numerator", None)
+DESEQ2_DEN = config.get("deseq2", {}).get("contrast", {}).get("denominator", None)
+
+# hisat2-build always creates 8 index files: .1..8.ht2
+HISAT2_INDEX_FILES = [f"{HISAT2_PREFIX}.{i}.ht2" for i in range(1, 9)]
+
+# merged counts / deseq2 outputs
+COUNTS_DIR = "results/counts"
+DESEQ2_DIR = "results/deseq2"
+MERGED_COUNTS = f"{COUNTS_DIR}/gene_counts.tsv"
+MERGED_SAMPLES = f"{COUNTS_DIR}/samples.meta.tsv"
+
+DESEQ2_RESULTS = f"{DESEQ2_DIR}/deseq2.results.tsv"
+DESEQ2_NORM = f"{DESEQ2_DIR}/deseq2.normalized_counts.tsv"
+DESEQ2_SESSION = f"{DESEQ2_DIR}/deseq2.sessionInfo.txt"
 
 
 rule all:
@@ -20,7 +52,7 @@ rule all:
         expand("results/qc/fastqc/raw/{sample}_R2_fastqc.html", sample=SAMPLE_NAMES),
         expand("results/qc/fastqc/raw/{sample}_R2_fastqc.zip",  sample=SAMPLE_NAMES),
 
-        # fastp
+        # fastp outputs + reports
         expand("results/trimmed/{sample}_R1.trim.fastq.gz", sample=SAMPLE_NAMES),
         expand("results/trimmed/{sample}_R2.trim.fastq.gz", sample=SAMPLE_NAMES),
         expand("results/trimmed/{sample}.fastp.html",       sample=SAMPLE_NAMES),
@@ -32,15 +64,38 @@ rule all:
         expand("results/qc/fastqc/trimmed/{sample}_R2.trim_fastqc.html", sample=SAMPLE_NAMES),
         expand("results/qc/fastqc/trimmed/{sample}_R2.trim_fastqc.zip",  sample=SAMPLE_NAMES),
 
-        # MultiQC
+        # MultiQC report
         "results/qc/multiqc/multiqc_report.html",
 
         # HISAT2 index
-        expand("data/reference/chm13v2/hisat2_index/chm13v2.{idx}.ht2", idx=range(1, 9)),
+        HISAT2_INDEX_FILES,
 
-        # BAM + BAI
-        expand("results/align/{sample}.sorted.bam", sample=SAMPLE_NAMES),
-        expand("results/align/{sample}.sorted.bam.bai", sample=SAMPLE_NAMES),
+        # Alignment products
+        expand("results/align/{sample}.sorted.bam",      sample=SAMPLE_NAMES),
+        expand("results/align/{sample}.sorted.bam.bai",  sample=SAMPLE_NAMES),
+
+        # BAM QC (samtools)
+        expand("results/qc/bam/{sample}.quickcheck.ok",  sample=SAMPLE_NAMES),
+        expand("results/qc/bam/{sample}.flagstat.txt",   sample=SAMPLE_NAMES),
+        expand("results/qc/bam/{sample}.idxstats.txt",   sample=SAMPLE_NAMES),
+
+        # Reference compatibility QC (BAM contigs vs GTF seqnames)
+        "results/qc/refs/gtf.refs.txt",
+        expand("results/qc/refs/{sample}.bam.refs.txt",  sample=SAMPLE_NAMES),
+        expand("results/qc/refs/{sample}.common.txt",    sample=SAMPLE_NAMES),
+        expand("results/qc/refs/{sample}.only_bam.txt",  sample=SAMPLE_NAMES),
+        expand("results/qc/refs/{sample}.only_gtf.txt",  sample=SAMPLE_NAMES),
+
+        # featureCounts gene counts (+ summary)
+        expand("results/counts/{sample}.featureCounts.txt",          sample=SAMPLE_NAMES),
+        expand("results/counts/{sample}.featureCounts.txt.summary",  sample=SAMPLE_NAMES),
+
+        # merged gene count matrix + DESeq2 outputs
+        MERGED_COUNTS,
+        MERGED_SAMPLES,
+        DESEQ2_RESULTS,
+        DESEQ2_NORM,
+        DESEQ2_SESSION,
 
 
 rule fastqc_raw:
@@ -57,8 +112,9 @@ rule fastqc_raw:
         "envs/fastqc.yaml"
     shell:
         r"""
+        set -euo pipefail
         mkdir -p results/qc/fastqc/raw
-        fastqc -t {threads} -o results/qc/fastqc/raw {input.r1} {input.r2}
+        fastqc -t {threads} -o results/qc/fastqc/raw {input.r1} {input.r2} {FASTQC_EXTRA}
         """
 
 
@@ -74,17 +130,16 @@ rule fastp_trim:
     threads: THREADS
     conda:
         "envs/fastp.yaml"
-    params:
-        extra=config["params"]["fastp"]["extra"]
     shell:
         r"""
+        set -euo pipefail
         mkdir -p results/trimmed
         fastp \
           -w {threads} \
           -i {input.r1} -I {input.r2} \
           -o {output.r1} -O {output.r2} \
           -h {output.html} -j {output.json} \
-          {params.extra}
+          {FASTP_EXTRA}
         """
 
 
@@ -102,8 +157,9 @@ rule fastqc_trimmed:
         "envs/fastqc.yaml"
     shell:
         r"""
+        set -euo pipefail
         mkdir -p results/qc/fastqc/trimmed
-        fastqc -t {threads} -o results/qc/fastqc/trimmed {input.r1} {input.r2}
+        fastqc -t {threads} -o results/qc/fastqc/trimmed {input.r1} {input.r2} {FASTQC_EXTRA}
         """
 
 
@@ -125,6 +181,7 @@ rule multiqc:
         "envs/multiqc.yaml"
     shell:
         r"""
+        set -euo pipefail
         mkdir -p results/qc/multiqc
         multiqc -o results/qc/multiqc results/qc/fastqc/raw results/qc/fastqc/trimmed results/trimmed
         """
@@ -132,24 +189,25 @@ rule multiqc:
 
 rule hisat2_index:
     input:
-        fasta_gz="data/reference/chm13v2/chm13v2.0.fa.gz"
+        fasta_gz=REF_FASTA_GZ
     output:
-        expand("data/reference/chm13v2/hisat2_index/chm13v2.{idx}.ht2", idx=range(1, 9))
+        HISAT2_INDEX_FILES
     threads: 4
     conda:
         "envs/hisat2.yaml"
     shell:
         r"""
-        mkdir -p data/reference/chm13v2/hisat2_index
-        gunzip -c {input.fasta_gz} > data/reference/chm13v2/chm13v2.0.fa
-        hisat2-build -p {threads} data/reference/chm13v2/chm13v2.0.fa data/reference/chm13v2/hisat2_index/chm13v2
-        rm -f data/reference/chm13v2/chm13v2.0.fa
+        set -euo pipefail
+        mkdir -p "$(dirname "{HISAT2_PREFIX}")"
+        gunzip -c {input.fasta_gz} > "{HISAT2_PREFIX}.fa"
+        hisat2-build -p {threads} "{HISAT2_PREFIX}.fa" "{HISAT2_PREFIX}"
+        rm -f "{HISAT2_PREFIX}.fa"
         """
 
 
 rule hisat2_align:
     input:
-        idx=expand("data/reference/chm13v2/hisat2_index/chm13v2.{i}.ht2", i=range(1, 9)),
+        idx=HISAT2_INDEX_FILES,
         r1="results/trimmed/{sample}_R1.trim.fastq.gz",
         r2="results/trimmed/{sample}_R2.trim.fastq.gz"
     output:
@@ -159,10 +217,11 @@ rule hisat2_align:
         "envs/hisat2.yaml"
     shell:
         r"""
+        set -euo pipefail
         mkdir -p results/align
-        hisat2 -p {threads} -x data/reference/chm13v2/hisat2_index/chm13v2 \
+        hisat2 -p {threads} {HISAT2_EXTRA} -x "{HISAT2_PREFIX}" \
           -1 {input.r1} -2 {input.r2} \
-        | samtools view -@ 2 -bS - \
+        | samtools view -@ 2 -bS {SAMTOOLS_VIEW_EXTRA} - \
         > {output.bam}
         """
 
@@ -179,11 +238,13 @@ rule sort_bam:
         "envs/hisat2.yaml"
     shell:
         r"""
+        set -euo pipefail
         mkdir -p {resources.tmpdir}
         samtools sort \
           -@ {threads} \
           -m 1G \
           -T {resources.tmpdir}/{wildcards.sample}.sorttmp \
+          {SAMTOOLS_SORT_EXTRA} \
           -o {output.bam} \
           {input}
         """
@@ -199,5 +260,164 @@ rule index_bam:
         "envs/hisat2.yaml"
     shell:
         r"""
+        set -euo pipefail
         samtools index {input}
+        """
+
+
+rule bam_qc:
+    input:
+        bam="results/align/{sample}.sorted.bam"
+    output:
+        ok="results/qc/bam/{sample}.quickcheck.ok",
+        flagstat="results/qc/bam/{sample}.flagstat.txt",
+        idxstats="results/qc/bam/{sample}.idxstats.txt"
+    threads: 1
+    conda:
+        "envs/hisat2.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p results/qc/bam
+        samtools quickcheck -v {input.bam} && echo "OK" > {output.ok}
+        samtools flagstat {input.bam} > {output.flagstat}
+        samtools idxstats {input.bam} > {output.idxstats}
+        """
+
+
+# Reference-name compatibility QC
+# Keep the GTF refs file as a *separate* rule (no wildcards),
+# so that ref_compat_qc remains strictly per-sample.
+
+rule gtf_refs:
+    input:
+        gtf=GTF
+    output:
+        "results/qc/refs/gtf.refs.txt"
+    threads: 1
+    conda:
+        "envs/hisat2.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p results/qc/refs
+        # Drop headers, take seqname column, strip CRLF, sort unique
+        grep -v '^#' {input.gtf} \
+          | cut -f1 \
+          | tr -d '\r' \
+          | LC_ALL=C sort -u \
+          > {output}
+        """
+
+
+rule ref_compat_qc:
+    input:
+        bam="results/align/{sample}.sorted.bam",
+        gtf_refs="results/qc/refs/gtf.refs.txt"
+    output:
+        bam_refs="results/qc/refs/{sample}.bam.refs.txt",
+        common="results/qc/refs/{sample}.common.txt",
+        only_bam="results/qc/refs/{sample}.only_bam.txt",
+        only_gtf="results/qc/refs/{sample}.only_gtf.txt"
+    threads: 1
+    resources:
+        tmpdir="/tmp"
+    conda:
+        "envs/hisat2.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p results/qc/refs
+
+        # BAM refs: idxstats has an extra '*' row -> remove it
+        samtools idxstats {input.bam} \
+          | cut -f1 \
+          | grep -v '^\*$' \
+          | LC_ALL=C sort -u \
+          > {output.bam_refs}
+
+        # Compare (both files are sorted)
+        comm -12 {output.bam_refs} {input.gtf_refs} > {output.common}
+        comm -23 {output.bam_refs} {input.gtf_refs} > {output.only_bam}
+        comm -13 {output.bam_refs} {input.gtf_refs} > {output.only_gtf}
+        """
+
+
+rule featurecounts:
+    input:
+        bam="results/align/{sample}.sorted.bam",
+        gtf=GTF
+    output:
+        counts="results/counts/{sample}.featureCounts.txt",
+        summary="results/counts/{sample}.featureCounts.txt.summary"
+    threads: THREADS
+    conda:
+        "envs/subread.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p results/counts
+        featureCounts -T {threads} \
+          -a {input.gtf} \
+          -o {output.counts} \
+          {FEATURECOUNTS_EXTRA} \
+          {input.bam}
+        """
+
+
+## Merge per-sample featureCounts into one matrix for DESeq2
+
+rule merge_featurecounts:
+    input:
+        counts=expand(f"{COUNTS_DIR}/{{sample}}.featureCounts.txt", sample=SAMPLE_NAMES),
+        samples=SAMPLES_TSV
+    output:
+        counts_matrix=MERGED_COUNTS,
+        sample_meta=MERGED_SAMPLES
+    threads: 1
+    run:
+        import pandas as pd
+
+        # Save sample metadata as-is (DESeq2 script expects 'sample' column)
+        sm = pd.read_csv(input.samples, sep="\t")
+        if "sample" not in sm.columns:
+            raise ValueError("samples.tsv must contain a 'sample' column.")
+        sm.to_csv(output.sample_meta, sep="\t", index=False)
+
+        # Merge counts: Geneid + one column per sample
+        merged = None
+        for fp in input.counts:
+            sname = fp.split("/")[-1].replace(".featureCounts.txt", "")
+            df = pd.read_csv(fp, sep="\t", comment="#")
+            count_col = df.columns[-1]  # last column is the BAM column
+            df = df[["Geneid", count_col]].rename(columns={count_col: sname})
+            merged = df if merged is None else merged.merge(df, on="Geneid", how="inner")
+
+        merged.to_csv(output.counts_matrix, sep="\t", index=False)
+
+
+rule deseq2:
+    input:
+        counts=MERGED_COUNTS,
+        samples=MERGED_SAMPLES
+    output:
+        results=DESEQ2_RESULTS,
+        norm=DESEQ2_NORM,
+        session=DESEQ2_SESSION
+    threads: 1
+    conda:
+        "envs/deseq2.yaml"
+    params:
+        design=DESEQ2_DESIGN,
+        factor=DESEQ2_FACTOR,
+        numerator=DESEQ2_NUM,
+        denominator=DESEQ2_DEN
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {DESEQ2_DIR}
+        Rscript workflow/scripts/deseq2.R \
+          "{input.counts}" "{input.samples}" \
+          "{params.design}" "{params.factor}" "{params.numerator}" "{params.denominator}" \
+          "{DESEQ2_DIR}/deseq2"
         """

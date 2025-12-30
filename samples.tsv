@@ -1,3 +1,6 @@
 sample	condition	r1	r2
-test	hs0	data/raw/test_R1.fastq.gz	data/raw/test_R2.fastq.gz
-
+hs0_rep1	hs0	data/raw/hs0_rep1_R1.fastq.gz	data/raw/hs0_rep1_R2.fastq.gz
+hs0_rep2	hs0	data/raw/hs0_rep2_R1.fastq.gz	data/raw/hs0_rep2_R2.fastq.gz
+hs0_rep3	hs0	data/raw/hs0_rep3_R1.fastq.gz	data/raw/hs0_rep3_R2.fastq.gz
+hs60_rep1	hs60	data/raw/hs60_rep1_R1.fastq.gz	data/raw/hs60_rep1_R2.fastq.gz
+hs60_rep2	hs60	data/raw/hs60_rep2_R1.fastq.gz	data/raw/hs60_rep2_R2.fastq.gz
