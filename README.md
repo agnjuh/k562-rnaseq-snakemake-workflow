@@ -104,5 +104,11 @@ Key outputs include:
 
 ## Notes
 
-The example dataset is used for demonstration purposes only.  
+The example dataset included in this repository is intended for **workflow demonstration and reproducibility testing**.
 The workflow is **generalisable** to other bulk mRNA-seq datasets with arbitrary numbers of biological replicates, experimental conditions, and reference genomes.
+
+## Statistical considerations
+
+While the pipeline fully supports arbitrary numbers of biological replicates and complex experimental designs, the small number of samples used here limits statistical power for differential expression analysis. In practice, a larger number of biological replicates is recommended to obtain robust and well-powered results.
+
+Future extensions of this repository may include additional biological replicates or alternative datasets to further demonstrate statistical robustness.
