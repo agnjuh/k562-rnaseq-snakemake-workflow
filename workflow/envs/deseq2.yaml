@@ -1,0 +1,14 @@
+name: deseq2
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.3
+  - bioconductor-deseq2
+  - r-tidyverse
+  - r-readr
+  - r-tibble
+  - r-optparse
+  - bioconductor-apeglm
+  - bioconductor-biocparallel
+  - r-data.table
