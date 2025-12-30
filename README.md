@@ -1,6 +1,6 @@
 # mRNA-seq-heatshock-snakemake
 
-A reproducible **Snakemake workflow for bulk mRNA-seq analysis** using a heat shock experiment in the **K562 human leukemia cell line**, aligned to the **T2T-CHM13 v2.0 human reference genome**, as an example dataset.
+A reproducible **Snakemake workflow for bulk mRNA-seq analysis** using a heat shock experiment in the **K562 human leukemia cell line**, aligned to the **T2T-CHM13 v2.0 human reference genome**.
 
 ---
 
@@ -96,7 +96,7 @@ Key outputs include:
 
 - Gene count matrix
 - DESeq2 differential expression results
-- Normalized counts
+- Normalised counts
 - QC reports (FastQC, MultiQC)
 - Session information for reproducibility
 
@@ -104,11 +104,10 @@ Key outputs include:
 
 ## Notes
 
-The example dataset included in this repository is intended for **workflow demonstration and reproducibility testing**.
-The workflow is **generalisable** to other bulk mRNA-seq datasets with arbitrary numbers of biological replicates, experimental conditions, and reference genomes.
+The example dataset included in this repository is intended for **workflow demonstration, validation, and reproducibility testing**. The pipeline is **generalisable** to other bulk mRNA-seq experiments, supporting arbitrary numbers of biological replicates, experimental conditions, and reference genomes.
 
 ## Statistical considerations
 
-While the pipeline fully supports arbitrary numbers of biological replicates and complex experimental designs, the small number of samples used here limits statistical power for differential expression analysis. In practice, a larger number of biological replicates is recommended to obtain robust and well-powered results.
+Although the workflow fully supports complex experimental designs and multiple biological replicates, the limited sample size used in this example restricts statistical power for differential expression analysis. In practical applications, a larger number of biological replicates is recommended to ensure robust inference and reliable effect size estimation.
 
-Future extensions of this repository may include additional biological replicates or alternative datasets to further demonstrate statistical robustness.
+Future extensions of this repository may incorporate additional biological replicates or alternative datasets to further illustrate statistical robustness and downstream interpretability.
